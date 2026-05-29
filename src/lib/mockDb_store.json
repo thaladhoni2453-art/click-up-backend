@@ -1,0 +1,139 @@
+{
+  "users": [
+    {
+      "id": "mock-user-karthik",
+      "email": "karthik245322748042@gmail.com",
+      "fullName": "Karthik Mareddy",
+      "passwordHash": "$2b$10$r845X4F9.TfG0W9kK7kQhO9Q6G5mQO6iE.1m825L07f4G1qO6G5mQ"
+    },
+    {
+      "id": "mock-user-receiver",
+      "email": "mareddykarthikeya@gmail.com",
+      "fullName": "Karthikeya Mareddy",
+      "passwordHash": "$2b$10$r845X4F9.TfG0W9kK7kQhO9Q6G5mQO6iE.1m825L07f4G1qO6G5mQ"
+    },
+    {
+      "id": "demo-user",
+      "email": "demo@wavework.ai",
+      "fullName": "Demo User",
+      "passwordHash": "$2b$10$r845X4F9.TfG0W9kK7kQhO9Q6G5mQO6iE.1m825L07f4G1qO6G5mQ"
+    }
+  ],
+  "organizations": [
+    {
+      "id": "mock-org",
+      "name": "WaveWork.ai Org",
+      "slug": "wavework-ai-org"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "demo-ws",
+      "orgId": "mock-org",
+      "name": "WaveWork Workspace",
+      "color": "#4F46E5",
+      "icon": "Briefcase"
+    },
+    {
+      "id": "mock-ws-1780038069415",
+      "orgId": "mock-org-1780038069415",
+      "name": "My Workspace",
+      "color": "#4F46E5",
+      "icon": "Briefcase"
+    }
+  ],
+  "spaces": [
+    {
+      "id": "demo-space",
+      "workspaceId": "demo-ws",
+      "name": "Engineering Space",
+      "color": "#4F46E5",
+      "icon": "Code",
+      "position": 0
+    }
+  ],
+  "statuses": [
+    {
+      "id": "todo-status",
+      "spaceId": "demo-space",
+      "name": "TO DO",
+      "color": "#8E8E93",
+      "position": 0
+    },
+    {
+      "id": "inprogress-status",
+      "spaceId": "demo-space",
+      "name": "IN PROGRESS",
+      "color": "#4F46E5",
+      "position": 1
+    },
+    {
+      "id": "done-status",
+      "spaceId": "demo-space",
+      "name": "COMPLETE",
+      "color": "#10B981",
+      "position": 2
+    }
+  ],
+  "lists": [
+    {
+      "id": "demo-list",
+      "spaceId": "demo-space",
+      "name": "Sprint Backlog",
+      "position": 0,
+      "folderId": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "mock-task-1",
+      "listId": "demo-list",
+      "name": "Design ClickUp Unified Dashboards",
+      "description": "Build Inbox, Replies, Assigned Comments, My Tasks, and Personal Space views.",
+      "priority": "HIGH",
+      "dueDate": "2026-05-31T06:08:20.622Z",
+      "statusId": "inprogress-status",
+      "position": 0
+    },
+    {
+      "id": "mock-task-2",
+      "listId": "demo-list",
+      "name": "Implement Real-time DM Status Presence",
+      "description": "Connect WebSocket identify events and show green status dots.",
+      "priority": "URGENT",
+      "dueDate": "2026-05-29T06:08:20.622Z",
+      "statusId": "todo-status",
+      "position": 1
+    }
+  ],
+  "comments": [],
+  "channels": [
+    {
+      "id": "mock-dm-room",
+      "name": "dm:mock-user-karthik:mock-user-receiver",
+      "description": "karthik245322748042@gmail.com invited mareddykarthikeya@gmail.com",
+      "isGroup": false,
+      "type": "DM",
+      "isDM": true,
+      "participantIds": [
+        "mock-user-karthik",
+        "mock-user-receiver"
+      ]
+    },
+    {
+      "id": "mock-dm-1780035392856",
+      "name": "dm:mock-user-1780031643312:mock-user-karthik",
+      "isDM": true,
+      "type": "DM",
+      "isGroup": false,
+      "participantIds": [
+        "mock-user-1780031643312",
+        "mock-user-karthik"
+      ],
+      "description": "sender@wavework.ai invited karthik245322748042@gmail.com"
+    }
+  ],
+  "inbox": [],
+  "messages": [],
+  "timeEntries": []
+}

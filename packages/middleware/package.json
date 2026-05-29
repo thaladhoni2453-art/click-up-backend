@@ -1,0 +1,15 @@
+{
+  "name": "@wavework/middleware",
+  "version": "1.0.0",
+  "main": "index.js",
+  "types": "src/index.ts",
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "@wavework/redis": "file:../redis"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "typescript": "^5.4.5"
+  }
+}

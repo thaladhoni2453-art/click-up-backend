@@ -1,0 +1,870 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://postgres:12345678@127.0.0.1:5432/wavework?schema=public"
+}
+
+// ─────────────────────────────────────────────
+// ORGANISATIONS & WORKSPACES
+// ─────────────────────────────────────────────
+
+model Organization {
+  id        String      @id @default(cuid())
+  name      String
+  slug      String      @unique
+  logoUrl   String?
+  plan      PlanType    @default(FREE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  workspaces Workspace[]
+  members    OrgMember[]
+}
+
+model Workspace {
+  id        String            @id @default(cuid())
+  orgId     String
+  name      String
+  color     String?
+  icon      String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  org        Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  spaces     Space[]
+  members    WorkspaceMember[]
+  goals      Goal[]
+  dashboards Dashboard[]
+
+  @@index([orgId])
+}
+
+model OrgMember {
+  id       String   @id @default(cuid())
+  orgId    String
+  userId   String
+  role     OrgRole  @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([orgId])
+  @@index([userId])
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+}
+
+// ─────────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  fullName     String
+  avatarUrl    String?
+  timezone     String   @default("UTC")
+  isVerified   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orgMembers       OrgMember[]
+  workspaceMembers WorkspaceMember[]
+  spaceMembers     SpaceMember[]
+  sessions         UserSession[]
+  notifications    Notification[]
+  timeEntries      TimeEntry[]
+  assignedTasks    TaskAssignee[]
+  comments         Comment[]
+  reactions        Reaction[]
+  createdTasks     Task[]            @relation("TaskCreator")
+  watchedTasks     TaskWatcher[]
+
+  lastSeenAt       DateTime        @default(now())
+  channelMembers   ChannelMember[]
+  sentMessages     Message[]
+  sentInvites      ChatInvite[]    @relation("InviteSender")
+  receivedInvites  ChatInvite[]    @relation("InviteReceiver")
+  messageReactions MessageReaction[]
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  refreshToken String   @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([refreshToken])
+}
+
+// ─────────────────────────────────────────────
+// HIERARCHY: Space → Folder → List → Task
+// ─────────────────────────────────────────────
+
+model Space {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String?
+  icon        String?
+  isPrivate   Boolean  @default(false)
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace    Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folders      Folder[]
+  lists        List[]
+  statuses     Status[]
+  members      SpaceMember[]
+  views        View[]
+  customFields CustomFieldDefinition[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, position])
+}
+
+model SpaceMember {
+  id      String    @id @default(cuid())
+  spaceId String
+  userId  String
+  role    SpaceRole @default(MEMBER)
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, userId])
+  @@index([spaceId])
+}
+
+model Folder {
+  id             String   @id @default(cuid())
+  spaceId        String
+  name           String
+  color          String?
+  icon           String?
+  position       Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  space          Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  lists          List[]
+  subfolders     Folder[] @relation("FolderToFolder")
+  parentFolder   Folder?  @relation("FolderToFolder", fields: [parentFolderId], references: [id])
+  parentFolderId String?
+
+  @@index([spaceId])
+  @@index([spaceId, position])
+}
+
+model List {
+  id         String   @id @default(cuid())
+  spaceId    String
+  folderId   String?
+  name       String
+  color      String?
+  icon       String?
+  position   Int      @default(0)
+  isArchived Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  space        Space                   @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  folder       Folder?                 @relation(fields: [folderId], references: [id])
+  tasks        Task[]
+  views        View[]
+  statuses     Status[]
+  customFields CustomFieldDefinition[]
+
+  @@index([spaceId])
+  @@index([folderId])
+}
+
+model Status {
+  id       String     @id @default(cuid())
+  spaceId  String?
+  listId   String?
+  name     String
+  color    String
+  type     StatusType @default(ACTIVE)
+  position Int        @default(0)
+
+  space Space? @relation(fields: [spaceId], references: [id])
+  list  List?  @relation(fields: [listId], references: [id])
+  tasks Task[]
+
+  @@index([spaceId])
+  @@index([listId])
+}
+
+// ─────────────────────────────────────────────
+// TASKS
+// ─────────────────────────────────────────────
+
+model Task {
+  id             String    @id @default(cuid())
+  listId         String
+  parentId       String?
+  creatorId      String
+  statusId       String
+  name           String
+  description    String?
+  descriptionRaw Json?
+  priority       Priority  @default(NONE)
+  dueDate        DateTime?
+  startDate      DateTime?
+  dueTime        String?
+  timeEstimate   Int?
+  timeSpent      Int?
+  points         Int?
+  story_points   Int       @default(0)
+  estimated_hours Float     @default(0)
+  completed_at   DateTime?
+  isRecurring    Boolean   @default(false)
+  recurrenceRule String?
+  position       Float     @default(0)
+  isArchived     Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  list              List               @relation(fields: [listId], references: [id], onDelete: Cascade)
+  parent            Task?              @relation("TaskToSubtask", fields: [parentId], references: [id])
+  subtasks          Task[]             @relation("TaskToSubtask")
+  creator           User               @relation("TaskCreator", fields: [creatorId], references: [id])
+  status            Status             @relation(fields: [statusId], references: [id])
+  assignees         TaskAssignee[]
+  tags              TaskTag[]
+  customFieldValues CustomFieldValue[]
+  dependencies      TaskDependency[]   @relation("DependentTask")
+  blockedBy         TaskDependency[]   @relation("BlockingTask")
+  comments          Comment[]
+  attachments       Attachment[]
+  timeEntries       TimeEntry[]
+  watchers          TaskWatcher[]
+  activities        ActivityLog[]
+
+  @@index([listId])
+  @@index([listId, position])
+  @@index([parentId])
+  @@index([statusId])
+  @@index([creatorId])
+  @@index([dueDate])
+}
+
+model TaskAssignee {
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId])
+}
+
+model TaskDependency {
+  id              String         @id @default(cuid())
+  dependentTaskId String
+  blockingTaskId  String
+  type            DependencyType @default(WAITING_ON)
+
+  dependentTask Task @relation("DependentTask", fields: [dependentTaskId], references: [id], onDelete: Cascade)
+  blockingTask  Task @relation("BlockingTask", fields: [blockingTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([dependentTaskId, blockingTaskId])
+}
+
+model TaskWatcher {
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String
+  tasks       TaskTag[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model TaskTag {
+  taskId String
+  tagId  String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+}
+
+// ─────────────────────────────────────────────
+// CUSTOM FIELDS
+// ─────────────────────────────────────────────
+
+model CustomFieldDefinition {
+  id         String          @id @default(cuid())
+  spaceId    String?
+  listId     String?
+  name       String
+  type       CustomFieldType
+  config     Json
+  position   Int             @default(0)
+  isRequired Boolean         @default(false)
+
+  space  Space?             @relation(fields: [spaceId], references: [id])
+  list   List?              @relation(fields: [listId], references: [id])
+  values CustomFieldValue[]
+
+  @@index([spaceId])
+  @@index([listId])
+}
+
+model CustomFieldValue {
+  id        String   @id @default(cuid())
+  taskId    String
+  fieldId   String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  task  Task                  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  field CustomFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, fieldId])
+  @@index([taskId])
+  @@index([fieldId])
+}
+
+// ─────────────────────────────────────────────
+// VIEWS
+// ─────────────────────────────────────────────
+
+model View {
+  id        String   @id @default(cuid())
+  spaceId   String?
+  listId    String?
+  name      String
+  type      ViewType
+  config    Json
+  isDefault Boolean  @default(false)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  space Space? @relation(fields: [spaceId], references: [id])
+  list  List?  @relation(fields: [listId], references: [id])
+
+  @@index([spaceId])
+  @@index([listId])
+}
+
+// ─────────────────────────────────────────────
+// DOCS
+// ─────────────────────────────────────────────
+
+model Doc {
+  id          String   @id @default(cuid())
+  workspaceId String
+  spaceId     String?
+  title       String
+  content     Json
+  icon        String?
+  coverUrl    String?
+  isPublic    Boolean  @default(false)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pages    DocPage[]
+  comments Comment[]
+
+  @@index([workspaceId])
+  @@index([spaceId])
+}
+
+model DocPage {
+  id       String   @id @default(cuid())
+  docId    String
+  title    String
+  content  Json
+  position Int      @default(0)
+  parentId String?
+
+  doc      Doc       @relation(fields: [docId], references: [id], onDelete: Cascade)
+  parent   DocPage?  @relation("DocPageTree", fields: [parentId], references: [id])
+  children DocPage[] @relation("DocPageTree")
+
+  @@index([docId])
+}
+
+// ─────────────────────────────────────────────
+// COMMENTS & ACTIVITY
+// ─────────────────────────────────────────────
+
+model Comment {
+  id         String   @id @default(cuid())
+  taskId     String?
+  docId      String?
+  authorId   String
+  content    Json
+  isResolved Boolean  @default(false)
+  parentId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  task      Task?      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  doc       Doc?       @relation(fields: [docId], references: [id], onDelete: Cascade)
+  author    User       @relation(fields: [authorId], references: [id])
+  parent    Comment?   @relation("CommentThread", fields: [parentId], references: [id])
+  replies   Comment[]  @relation("CommentThread")
+  reactions Reaction[]
+
+  @@index([taskId])
+  @@index([authorId])
+}
+
+model Reaction {
+  id        String @id @default(cuid())
+  commentId String
+  userId    String
+  emoji     String
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  taskId    String
+  actorId   String
+  action    String
+  data      Json
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([taskId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// TIME TRACKING
+// ─────────────────────────────────────────────
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  taskId      String
+  userId      String
+  description String?
+  startedAt   DateTime
+  endedAt     DateTime?
+  duration    Int?
+  billable    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([userId, startedAt])
+}
+
+// ─────────────────────────────────────────────
+// GOALS & OKRs
+// ─────────────────────────────────────────────
+
+model Goal {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  ownerId     String
+  dueDate     DateTime?
+  color       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  targets   GoalTarget[]
+
+  @@index([workspaceId])
+}
+
+model GoalTarget {
+  id           String     @id @default(cuid())
+  goalId       String
+  name         String
+  type         TargetType
+  unit         String?
+  startValue   Float      @default(0)
+  targetValue  Float
+  currentValue Float      @default(0)
+  createdAt    DateTime   @default(now())
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+}
+
+// ─────────────────────────────────────────────
+// AUTOMATIONS
+// ─────────────────────────────────────────────
+
+model Automation {
+  id          String   @id @default(cuid())
+  workspaceId String
+  spaceId     String?
+  name        String
+  isEnabled   Boolean  @default(true)
+  trigger     Json
+  conditions  Json
+  actions     Json
+  runCount    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([spaceId])
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String?
+  data      Json?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// ATTACHMENTS
+// ─────────────────────────────────────────────
+
+model Attachment {
+  id         String   @id @default(cuid())
+  taskId     String
+  uploaderId String
+  fileName   String
+  fileSize   Int
+  mimeType   String
+  url        String
+  createdAt  DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+// ─────────────────────────────────────────────
+// DASHBOARDS
+// ─────────────────────────────────────────────
+
+model Dashboard {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  isShared    Boolean  @default(false)
+  layout      Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+// ─────────────────────────────────────────────
+// CHAT
+// ─────────────────────────────────────────────
+
+model Channel {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String?
+  avatarUrl   String?
+  description String?
+  type        ChannelType @default(GROUP)
+  isPrivate   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+
+  messages     Message[]
+  members      ChannelMember[]
+  invites      ChatInvite[]
+  callSessions CallSession[]
+
+  @@index([workspaceId])
+  @@index([createdById])
+}
+
+model Message {
+  id        String      @id @default(cuid())
+  channelId String
+  authorId  String
+  content   String
+  type      MessageType @default(TEXT)
+  fileUrl   String?
+  fileName  String?
+  fileSize  Int?
+  fileMime  String?
+  isEdited  Boolean     @default(false)
+  isDeleted Boolean     @default(false)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author    User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reactions MessageReaction[]
+
+  @@index([channelId])
+  @@index([channelId, createdAt])
+  @@index([authorId])
+}
+
+model ChannelMember {
+  id        String      @id @default(cuid())
+  channelId String
+  userId    String
+  role      ChannelRole @default(MEMBER)
+  joinedAt  DateTime    @default(now())
+  lastRead  DateTime    @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+model ChatInvite {
+  id         String       @id @default(cuid())
+  channelId  String?
+  senderId   String
+  receiverId String?
+  email      String
+  token      String       @unique @default(cuid())
+  status     InviteStatus @default(PENDING)
+  expiresAt  DateTime
+  createdAt  DateTime     @default(now())
+
+  channel  Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  sender   User     @relation("InviteSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User?    @relation("InviteReceiver", fields: [receiverId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([token])
+}
+
+model CallSession {
+  id          String     @id @default(cuid())
+  channelId   String
+  roomName    String     @unique
+  type        CallType   @default(VIDEO)
+  status      CallStatus @default(ACTIVE)
+  startedById String
+  startedAt   DateTime   @default(now())
+  endedAt     DateTime?
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([roomName])
+}
+
+enum ChannelType {
+  DM
+  GROUP
+}
+
+enum ChannelRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MessageType {
+  TEXT
+  FILE
+  IMAGE
+  SYSTEM
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum CallType {
+  VIDEO
+  VOICE
+}
+
+enum CallStatus {
+  ACTIVE
+  ENDED
+}
+
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum PlanType {
+  FREE
+  UNLIMITED
+  BUSINESS
+  ENTERPRISE
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum WorkspaceRole {
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum SpaceRole {
+  ADMIN
+  MEMBER
+  VIEW_ONLY
+}
+
+enum Priority {
+  NONE
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum StatusType {
+  OPEN
+  ACTIVE
+  DONE
+  CLOSED
+}
+
+enum ViewType {
+  LIST
+  BOARD
+  GANTT
+  CALENDAR
+  TABLE
+  TIMELINE
+  WORKLOAD
+  MINDMAP
+  CHAT
+  WHITEBOARD
+  FORM
+  EMBED
+  ACTIVITY
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  DROPDOWN
+  MULTI_SELECT
+  CHECKBOX
+  PERSON
+  CURRENCY
+  EMAIL
+  URL
+  FORMULA
+  RATING
+  PROGRESS
+  LABEL
+  PHONE
+}
+
+enum DependencyType {
+  WAITING_ON
+  BLOCKING
+}
+
+enum TargetType {
+  NUMBER
+  CURRENCY
+  TRUE_FALSE
+  TASK_COUNT
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  COMMENT_ADDED
+  STATUS_CHANGED
+  DUE_DATE_REMINDER
+  MENTION
+  AUTOMATION
+}

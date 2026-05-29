@@ -1,0 +1,29 @@
+{
+  "name": "wavework-chat-service",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon --quiet server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.0-rc.4",
+    "socket.io": "^4.7.5",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "ioredis": "^5.4.1",
+    "@aws-sdk/client-s3": "^3.1053.0",
+    "@aws-sdk/s3-request-presigner": "^3.1053.0",
+    "nodemailer": "^8.0.8",
+    "livekit-server-sdk": "^2.15.3",
+    "@wavework/db": "file:../../packages/db",
+    "@wavework/redis": "file:../../packages/redis",
+    "@wavework/middleware": "file:../../packages/middleware"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

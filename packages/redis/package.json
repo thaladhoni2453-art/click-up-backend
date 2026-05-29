@@ -1,0 +1,12 @@
+{
+  "name": "@wavework/redis",
+  "version": "1.0.0",
+  "main": "index.js",
+  "types": "src/index.ts",
+  "dependencies": {
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

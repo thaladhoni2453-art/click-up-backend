@@ -1,0 +1,12 @@
+{
+  "name": "@wavework/events",
+  "version": "1.0.0",
+  "main": "index.js",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@wavework/redis": "file:../redis"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
