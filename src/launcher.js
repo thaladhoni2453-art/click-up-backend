@@ -41,11 +41,11 @@ console.log(`========================================`);
 
 SERVICES.forEach((service) => {
   const servicePath = path.resolve(__dirname, "..", "services", service.dir);
-  
+
   const isProd = process.env.NODE_ENV === "production";
   const cmd = isProd ? "node" : "npx";
   const args = isProd ? ["server.js"] : ["nodemon", "--quiet", "server.js"];
-  
+
   const proc = spawn(cmd, args, {
     cwd: servicePath,
     shell: true,

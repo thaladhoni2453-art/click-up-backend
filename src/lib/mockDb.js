@@ -102,14 +102,19 @@ const defaultDb = {
 
   messages: [],
 
-  timeEntries: []
+  timeEntries: [],
+  docs: [],
+  folders: [],
+  spaceMembers: []
 };
 
 function readDb() {
   try {
     if (fs.existsSync(storePath)) {
       const content = fs.readFileSync(storePath, "utf8");
-      return JSON.parse(content);
+      const data = JSON.parse(content);
+      // Cleanly merge defaultDb so that any new properties (like docs) are guaranteed to exist
+      return { ...defaultDb, ...data };
     }
   } catch (e) {
     console.error("Error reading mockDb_store.json, using default", e);
@@ -132,19 +137,62 @@ if (!fs.existsSync(storePath)) {
 
 let dbInMemory = readDb();
 
-// Periodic sync back to file in case of in-memory mutations
-const syncInterval = setInterval(() => {
-  writeDb(dbInMemory);
-}, 500);
-
-if (syncInterval.unref) {
-  syncInterval.unref();
+// Deep recursive proxy wrapper to intercept array mutating methods (push, splice, etc.) and deep assignments
+function makeObservable(val, onWrite) {
+  if (Array.isArray(val)) {
+    return new Proxy(val, {
+      get(target, prop, receiver) {
+        const item = Reflect.get(target, prop, receiver);
+        if (typeof item === "function") {
+          const mutatingMethods = ["push", "pop", "shift", "unshift", "splice", "reverse", "sort", "fill"];
+          if (mutatingMethods.includes(prop)) {
+            return function(...args) {
+              const res = item.apply(target, args);
+              onWrite();
+              return res;
+            };
+          }
+        }
+        if (typeof item === "object" && item !== null) {
+          return makeObservable(item, onWrite);
+        }
+        return item;
+      },
+      set(target, prop, value, receiver) {
+        const res = Reflect.set(target, prop, value, receiver);
+        onWrite();
+        return res;
+      }
+    });
+  } else if (val !== null && typeof val === "object") {
+    return new Proxy(val, {
+      get(target, prop, receiver) {
+        const item = Reflect.get(target, prop, receiver);
+        if (typeof item === "object" && item !== null) {
+          return makeObservable(item, onWrite);
+        }
+        return item;
+      },
+      set(target, prop, value, receiver) {
+        const res = Reflect.set(target, prop, value, receiver);
+        onWrite();
+        return res;
+      }
+    });
+  }
+  return val;
 }
 
 const mockDb = new Proxy({}, {
   get(target, prop) {
     dbInMemory = readDb();
-    return dbInMemory[prop];
+    const val = dbInMemory[prop];
+    if (typeof val === "object" && val !== null) {
+      return makeObservable(val, () => {
+        writeDb(dbInMemory);
+      });
+    }
+    return val;
   },
   set(target, prop, value) {
     dbInMemory[prop] = value;

@@ -10,6 +10,80 @@ const { prisma } = require("@wavework/db");
 const { authMiddleware } = require("@wavework/middleware");
 const { mockDb } = require("../../src/lib/mockDb");
 
+const net = require("net");
+let isDbOffline = false;
+
+const checkDbConnection = () => {
+  return new Promise((resolve) => {
+    let host = "127.0.0.1";
+    let port = 5432;
+    
+    const dbUrl = process.env.DATABASE_URL;
+    if (dbUrl) {
+      try {
+        const matches = dbUrl.match(/@([^:/]+)(?::(\d+))?/);
+        if (matches) {
+          host = matches[1];
+          if (matches[2]) port = parseInt(matches[2]);
+        }
+      } catch (e) {
+        // Fall back to default host/port on parsing error
+      }
+    }
+
+    const socket = new net.Socket();
+    socket.setTimeout(1000); // 1 second timeout
+
+    socket.on("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+
+    socket.on("timeout", () => {
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.on("error", () => {
+      socket.destroy();
+      resolve(false);
+    });
+
+    socket.connect(port, host);
+  });
+};
+
+// Run dynamic schema migration to ensure the docs table exists if database is online
+const runDocsMigration = async () => {
+  console.log("🌊 [Extra Service Startup] Checking database connectivity...");
+  const isOnline = await checkDbConnection();
+  
+  if (!isOnline) {
+    isDbOffline = true;
+    console.warn("⚠️ [Extra Service Startup] Database is offline. Activating 100% resilient mockDb mode for Docs!");
+    return;
+  }
+
+  try {
+    console.log("🌊 [Extra Service Startup] Database is online. Verifying docs table...");
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS docs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        title TEXT DEFAULT 'Untitled',
+        content TEXT DEFAULT '',
+        owner_id TEXT,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log("🌊 [Extra Service Startup] Docs table verified successfully!");
+  } catch (err) {
+    console.warn("⚠️ [Extra Service Startup] Docs table initialization skipped (possibly running mockDb):", err.message);
+    isDbOffline = true;
+  }
+};
+runDocsMigration();
+
 let nodemailer;
 try {
   nodemailer = require("nodemailer");
@@ -971,6 +1045,261 @@ app.delete("/api/extra/docs/:id", async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     return res.json({ success: true });
+  }
+});
+
+// ─────────────────────────────────────────────
+// NEW DOCS REST API ENDPOINTS (PostgreSQL + mockDb Fallback)
+// ─────────────────────────────────────────────
+app.get("/api/docs", authMiddleware, async (req, res) => {
+  const userId = req.userId || "demo-user";
+  if (isDbOffline) {
+    const userDocs = mockDb.docs.filter(d => d.owner_id === userId);
+    return res.json(userDocs);
+  }
+  try {
+    // Fast-fail check for DB connectivity before running raw SQL queries
+    await prisma.user.findFirst({ select: { id: true } });
+    const docs = await prisma.$queryRawUnsafe(
+      'SELECT * FROM docs WHERE owner_id = $1 ORDER BY created_at DESC',
+      userId
+    );
+    return res.json(docs);
+  } catch (error) {
+    console.error("DB query for docs failed, falling back to mockDb:", error.message);
+    const userDocs = mockDb.docs.filter(d => d.owner_id === userId);
+    return res.json(userDocs);
+  }
+});
+
+app.post("/api/docs", authMiddleware, async (req, res) => {
+  const userId = req.userId || "demo-user";
+  let createdDocData;
+  if (isDbOffline) {
+    createdDocData = {
+      id: "mock-doc-uuid-" + Date.now(),
+      title: 'Untitled',
+      content: '',
+      owner_id: userId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    const currentDocs = mockDb.docs || [];
+    currentDocs.push(createdDocData);
+    mockDb.docs = currentDocs; // Trigger proxy set to write to file
+    return res.status(201).json(createdDocData);
+  }
+  const newDocId = require("crypto").randomUUID();
+  try {
+    // Fast-fail check for DB connectivity before running raw SQL queries
+    await prisma.user.findFirst({ select: { id: true } });
+    await prisma.$queryRawUnsafe(
+      'INSERT INTO docs (id, title, content, owner_id) VALUES ($1::uuid, $2, $3, $4)',
+      newDocId, 'Untitled', '', userId
+    );
+    const [createdDoc] = await prisma.$queryRawUnsafe(
+      'SELECT * FROM docs WHERE id = $1::uuid',
+      newDocId
+    );
+    return res.status(201).json(createdDoc || { id: newDocId, title: 'Untitled', content: '', owner_id: userId });
+  } catch (error) {
+    console.error("DB create doc failed, falling back to mockDb:", error.message);
+    createdDocData = {
+      id: "mock-doc-uuid-" + Date.now(),
+      title: 'Untitled',
+      content: '',
+      owner_id: userId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    const currentDocs = mockDb.docs || [];
+    currentDocs.push(createdDocData);
+    mockDb.docs = currentDocs; // Trigger proxy set to write to file
+    return res.status(201).json(createdDocData);
+  }
+});
+
+app.get("/api/docs/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  if (isDbOffline) {
+    const doc = mockDb.docs.find(d => d.id === id);
+    if (!doc) return res.status(404).json({ error: "Doc not found (mockDb)" });
+    return res.json(doc);
+  }
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  if (!isUuid) {
+    // Skip SQL check for non-UUID strings to prevent PostgreSQL syntax errors
+    const mockDoc = mockDb.docs.find(d => d.id === id);
+    if (mockDoc) return res.json(mockDoc);
+    return res.status(404).json({ error: "Doc not found (mockDb)" });
+  }
+
+  try {
+    // Fast-fail check for DB connectivity before running raw SQL queries
+    await prisma.user.findFirst({ select: { id: true } });
+    const [doc] = await prisma.$queryRawUnsafe(
+      'SELECT * FROM docs WHERE id = $1::uuid',
+      id
+    );
+    if (!doc) {
+      // Fallback: Check if document exists in mockDb
+      const mockDoc = mockDb.docs.find(d => d.id === id);
+      if (mockDoc) return res.json(mockDoc);
+      return res.status(404).json({ error: "Doc not found" });
+    }
+    return res.json(doc);
+  } catch (error) {
+    console.error("DB fetch single doc failed, falling back to mockDb:", error.message);
+    const doc = mockDb.docs.find(d => d.id === id);
+    if (!doc) return res.status(404).json({ error: "Doc not found (mockDb)" });
+    return res.json(doc);
+  }
+});
+
+app.put("/api/docs/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { title, content } = req.body;
+  const userId = req.userId || "demo-user";
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  if (isDbOffline || !isUuid) {
+    const currentDocs = mockDb.docs || [];
+    const idx = currentDocs.findIndex(d => d.id === id);
+    if (idx !== -1) {
+      if (title !== undefined) currentDocs[idx].title = title;
+      if (content !== undefined) currentDocs[idx].content = content;
+      currentDocs[idx].updated_at = new Date().toISOString();
+      mockDb.docs = currentDocs; // Trigger proxy set to write to file
+      return res.json(currentDocs[idx]);
+    } else {
+      // SELF-HEALING: Auto-recreate the lost document in mockDb
+      const newDoc = {
+        id,
+        title: title || 'Untitled',
+        content: content || '',
+        owner_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      currentDocs.push(newDoc);
+      mockDb.docs = currentDocs;
+      return res.status(201).json(newDoc);
+    }
+  }
+
+  try {
+    // Fast-fail check for DB connectivity before running raw SQL queries
+    await prisma.user.findFirst({ select: { id: true } });
+
+    // Check if it exists in SQL database first
+    const [existingDoc] = await prisma.$queryRawUnsafe(
+      'SELECT * FROM docs WHERE id = $1::uuid',
+      id
+    );
+
+    if (existingDoc) {
+      await prisma.$queryRawUnsafe(
+        'UPDATE docs SET title = $1, content = $2, updated_at = NOW() WHERE id = $3::uuid',
+        title, content, id
+      );
+      const [updatedDoc] = await prisma.$queryRawUnsafe(
+        'SELECT * FROM docs WHERE id = $1::uuid',
+        id
+      );
+      return res.json(updatedDoc || { id, title, content });
+    }
+
+    // Check if it exists in mockDb
+    const currentDocs = mockDb.docs || [];
+    const idx = currentDocs.findIndex(d => d.id === id);
+    if (idx !== -1) {
+      if (title !== undefined) currentDocs[idx].title = title;
+      if (content !== undefined) currentDocs[idx].content = content;
+      currentDocs[idx].updated_at = new Date().toISOString();
+      mockDb.docs = currentDocs; // Trigger proxy set to write to file
+      return res.json(currentDocs[idx]);
+    }
+
+    // SELF-HEALING: Auto-recreate the document. Insert into SQL as it has a valid UUID format
+    await prisma.$queryRawUnsafe(
+      'INSERT INTO docs (id, title, content, owner_id) VALUES ($1::uuid, $2, $3, $4)',
+      id, title || 'Untitled', content || '', userId
+    );
+    const [newDoc] = await prisma.$queryRawUnsafe(
+      'SELECT * FROM docs WHERE id = $1::uuid',
+      id
+    );
+    return res.status(201).json(newDoc || { id, title, content, owner_id: userId });
+  } catch (error) {
+    console.error("DB update doc failed, falling back to mockDb:", error.message);
+    const currentDocs = mockDb.docs || [];
+    const idx = currentDocs.findIndex(d => d.id === id);
+    if (idx !== -1) {
+      if (title !== undefined) currentDocs[idx].title = title;
+      if (content !== undefined) currentDocs[idx].content = content;
+      currentDocs[idx].updated_at = new Date().toISOString();
+      mockDb.docs = currentDocs; // Trigger proxy set to write to file
+      return res.json(currentDocs[idx]);
+    } else {
+      // SELF-HEALING: Auto-recreate in mockDb fallback
+      const newDoc = {
+        id,
+        title: title || 'Untitled',
+        content: content || '',
+        owner_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      currentDocs.push(newDoc);
+      mockDb.docs = currentDocs;
+      return res.status(201).json(newDoc);
+    }
+  }
+});
+
+app.delete("/api/docs/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  // Always attempt to delete from mockDb as well
+  const deleteFromMockDb = () => {
+    const currentDocs = mockDb.docs || [];
+    const idx = currentDocs.findIndex(d => d.id === id);
+    if (idx !== -1) {
+      currentDocs.splice(idx, 1);
+      mockDb.docs = currentDocs; // Trigger proxy set to write to file
+      return true;
+    }
+    return false;
+  };
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  if (isDbOffline || !isUuid) {
+    const deleted = deleteFromMockDb();
+    if (deleted) return res.json({ success: true });
+    return res.status(404).json({ error: "Doc not found (mockDb)" });
+  }
+
+  try {
+    // Fast-fail check for DB connectivity before running raw SQL queries
+    await prisma.user.findFirst({ select: { id: true } });
+    
+    // Proactively clean it out of mockDb
+    deleteFromMockDb();
+
+    await prisma.$queryRawUnsafe(
+      'DELETE FROM docs WHERE id = $1::uuid',
+      id
+    );
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("DB delete doc failed, falling back to mockDb:", error.message);
+    const deleted = deleteFromMockDb();
+    if (deleted) return res.json({ success: true });
+    return res.status(404).json({ error: "Doc not found (mockDb)" });
   }
 });
 

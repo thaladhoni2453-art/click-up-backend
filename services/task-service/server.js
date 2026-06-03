@@ -7,6 +7,24 @@ const dotenv = require("dotenv");
 dotenv.config({ path: "../../../.env" });
 
 const { prisma } = require("@wavework/db");
+
+// Run dynamic schema migrations on startup
+const runStartupMigration = async () => {
+  try {
+    console.log("🌊 [Task Service Startup] Ensuring database columns exist via ALTER TABLE...");
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "Task" 
+      ADD COLUMN IF NOT EXISTS "story_points" INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "estimated_hours" DOUBLE PRECISION NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "completed_at" TIMESTAMP WITH TIME ZONE;
+    `);
+    console.log("🌊 [Task Service Startup] Database schema altered successfully!");
+  } catch (err) {
+    console.warn("⚠️ [Task Service Startup] Alter table migration skipped or failed (possibly running mockDb):", err.message);
+  }
+};
+runStartupMigration();
+
 const { redisCache } = require("@wavework/redis");
 const { publishEvent } = require("@wavework/events");
 const { authMiddleware } = require("@wavework/middleware");
@@ -232,13 +250,18 @@ app.get("/api/tasks/:id", async (req, res) => {
 
 // Create Task (Invalidates Cache & Publishes Event)
 app.post("/api/tasks", async (req, res) => {
-  const { listId, name, description, priority, dueDate, statusId, position } = req.body;
+  const { listId, name, description, priority, dueDate, statusId, position, timeEstimate, estimated_hours, story_points, points } = req.body;
 
   if (!listId || !name) {
     return res.status(400).json({ error: "listId and name are required parameters" });
   }
 
   try {
+    const parsedEstimate = timeEstimate !== undefined ? parseInt(timeEstimate) : null;
+    const parsedHours = estimated_hours !== undefined ? parseFloat(estimated_hours) : (timeEstimate !== undefined ? parseFloat(timeEstimate) : 0);
+    const parsedPoints = points !== undefined ? parseInt(points) : null;
+    const parsedStoryPoints = story_points !== undefined ? parseInt(story_points) : (points !== undefined ? parseInt(points) : 0);
+
     const task = await prisma.task.create({
       data: {
         listId,
@@ -249,6 +272,10 @@ app.post("/api/tasks", async (req, res) => {
         priority: priority || "NONE",
         dueDate: dueDate ? new Date(dueDate) : null,
         position: position || 1000.0,
+        timeEstimate: parsedEstimate,
+        estimated_hours: parsedHours,
+        points: parsedPoints,
+        story_points: parsedStoryPoints
       },
       include: { status: true },
     });
@@ -271,6 +298,12 @@ app.post("/api/tasks", async (req, res) => {
     return res.status(201).json(task);
   } catch (error) {
     const taskId = "mock-task-" + Date.now();
+    
+    const parsedEstimate = timeEstimate !== undefined ? parseInt(timeEstimate) : null;
+    const parsedHours = estimated_hours !== undefined ? parseFloat(estimated_hours) : (timeEstimate !== undefined ? parseFloat(timeEstimate) : 0);
+    const parsedPoints = points !== undefined ? parseInt(points) : null;
+    const parsedStoryPoints = story_points !== undefined ? parseInt(story_points) : (points !== undefined ? parseInt(points) : 0);
+
     const mockTask = {
       id: taskId,
       listId,
@@ -281,7 +314,11 @@ app.post("/api/tasks", async (req, res) => {
       priority: priority || "NONE",
       dueDate: dueDate ? new Date(dueDate) : null,
       position: position || 1000.0,
-      timeSpent: 0
+      timeSpent: 0,
+      timeEstimate: parsedEstimate,
+      estimated_hours: parsedHours,
+      points: parsedPoints,
+      story_points: parsedStoryPoints
     };
 
     mockDb.tasks.push(mockTask);
@@ -305,7 +342,7 @@ app.post("/api/tasks", async (req, res) => {
 // Update Task (Invalidates Cache & Publishes Event)
 app.patch("/api/tasks/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, description, priority, dueDate, statusId, position } = req.body;
+  const { name, description, priority, dueDate, statusId, position, timeEstimate, estimated_hours, story_points, points } = req.body;
 
   try {
     const updateData = {};
@@ -331,6 +368,22 @@ app.patch("/api/tasks/:id", async (req, res) => {
       }
     }
     if (position !== undefined) updateData.position = position;
+
+    // Support updating estimates & points
+    if (timeEstimate !== undefined) {
+      updateData.timeEstimate = timeEstimate !== null ? parseInt(timeEstimate) : null;
+      updateData.estimated_hours = timeEstimate !== null ? parseFloat(timeEstimate) : 0;
+    }
+    if (estimated_hours !== undefined) {
+      updateData.estimated_hours = estimated_hours !== null ? parseFloat(estimated_hours) : 0;
+    }
+    if (points !== undefined) {
+      updateData.points = points !== null ? parseInt(points) : null;
+      updateData.story_points = points !== null ? parseInt(points) : 0;
+    }
+    if (story_points !== undefined) {
+      updateData.story_points = story_points !== null ? parseInt(story_points) : 0;
+    }
 
     const task = await prisma.task.update({
       where: { id },
@@ -366,6 +419,22 @@ app.patch("/api/tasks/:id", async (req, res) => {
       }
     }
     if (position !== undefined) mockDb.tasks[idx].position = position;
+
+    // Mock updates
+    if (timeEstimate !== undefined) {
+      mockDb.tasks[idx].timeEstimate = timeEstimate !== null ? parseInt(timeEstimate) : null;
+      mockDb.tasks[idx].estimated_hours = timeEstimate !== null ? parseFloat(timeEstimate) : 0;
+    }
+    if (estimated_hours !== undefined) {
+      mockDb.tasks[idx].estimated_hours = estimated_hours !== null ? parseFloat(estimated_hours) : 0;
+    }
+    if (points !== undefined) {
+      mockDb.tasks[idx].points = points !== null ? parseInt(points) : null;
+      mockDb.tasks[idx].story_points = points !== null ? parseInt(points) : 0;
+    }
+    if (story_points !== undefined) {
+      mockDb.tasks[idx].story_points = story_points !== null ? parseInt(story_points) : 0;
+    }
 
     const updated = mockDb.tasks[idx];
     const status = mockDb.statuses.find((st) => st.id === updated.statusId) || { id: updated.statusId, name: "TO DO", color: "#8E8E93" };

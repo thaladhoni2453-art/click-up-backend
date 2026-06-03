@@ -14,8 +14,11 @@ app.use(cors({
 const SERVICES = {
   "/api/auth": 3001,
   "/api/workspaces": 3002,
+  "/api/spaces": 3002,
+  "/api/folders": 3002,
   "/api/tasks": 3003,
   "/api/dashboard": 3003,
+  "/api/docs": 3005,
   "/api/extra": 3005,
   "/api/chat": 3006,
   "/chat/uploads": 3006,
