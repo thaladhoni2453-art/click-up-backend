@@ -181,6 +181,52 @@
       "points": null,
       "story_points": 0,
       "completed_at": null
+    },
+    {
+      "id": "mock-task-1780472259254",
+      "listId": "cmpr775bj00092p04ldrb7syf",
+      "creatorId": "cmpk0rzpo00024y0eia15d0k0",
+      "statusId": "todo",
+      "name": "htjtj",
+      "description": "\n\n__ENERGY_TAG__: Low",
+      "priority": "NORMAL",
+      "dueDate": "2026-06-01T06:30:00.000Z",
+      "position": 1000,
+      "timeSpent": 0,
+      "timeEstimate": 1,
+      "estimated_hours": 1,
+      "points": null,
+      "story_points": 0
+    },
+    {
+      "id": "mock-task-1780472346434",
+      "listId": "cmpr77e50000b2p040oof84ba",
+      "creatorId": "cmpk0rzpo00024y0eia15d0k0",
+      "statusId": "todo",
+      "name": "g5ererg",
+      "priority": "NONE",
+      "dueDate": "2026-06-05T00:00:00.000Z",
+      "position": 1000,
+      "timeSpent": 0,
+      "timeEstimate": null,
+      "estimated_hours": 0,
+      "points": null,
+      "story_points": 0
+    },
+    {
+      "id": "mock-task-1780472384498",
+      "listId": "cmpr77e50000b2p040oof84ba",
+      "creatorId": "cmpk0rzpo00024y0eia15d0k0",
+      "statusId": "todo",
+      "name": "ggrwgwg",
+      "priority": "NONE",
+      "dueDate": "2026-06-05T00:00:00.000Z",
+      "position": 1000,
+      "timeSpent": 0,
+      "timeEstimate": null,
+      "estimated_hours": 0,
+      "points": null,
+      "story_points": 0
     }
   ],
   "comments": [
