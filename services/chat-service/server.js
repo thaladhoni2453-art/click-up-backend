@@ -532,8 +532,25 @@ app.post("/api/chat/channels", authMiddleware, async (req, res) => {
       return res.json({ channel: newChannel });
     }
 
+    // Resolve workspaceId
+    let workspaceId = "default-ws";
+    try {
+      const wsMember = await prisma.workspaceMember.findFirst({
+        where: { userId: req.userId }
+      });
+      if (wsMember) {
+        workspaceId = wsMember.workspaceId;
+      } else {
+        const firstWs = await prisma.workspace.findFirst();
+        if (firstWs) workspaceId = firstWs.id;
+      }
+    } catch (e) {
+      console.warn("[Chat Service] Failed to resolve workspaceId for channel:", e.message);
+    }
+
     const channel = await prisma.channel.create({
       data: {
+        workspaceId,
         name,
         description,
         isPrivate: !!isPrivate,
@@ -600,7 +617,7 @@ app.post("/api/chat/dm", authMiddleware, async (req, res) => {
         type: "DM",
         isGroup: false,
         participantIds: [req.userId, targetUserId],
-        description: `${senderObj.email} invited ${targetObj.email}`
+        description: "ACCEPTED_DM"
       };
       mockDb.channels.push(newDM);
       
@@ -634,10 +651,28 @@ app.post("/api/chat/dm", authMiddleware, async (req, res) => {
         return res.json({ channel: existing, created: false });
       }
 
+      // Resolve workspaceId
+      let workspaceId = "default-ws";
+      try {
+        const wsMember = await prisma.workspaceMember.findFirst({
+          where: { userId: req.userId }
+        });
+        if (wsMember) {
+          workspaceId = wsMember.workspaceId;
+        } else {
+          const firstWs = await prisma.workspace.findFirst();
+          if (firstWs) workspaceId = firstWs.id;
+        }
+      } catch (e) {
+        console.warn("[Chat Service] Failed to resolve workspaceId for DM:", e.message);
+      }
+
       const channel = await prisma.channel.create({
         data: {
+          workspaceId,
           type: "DM",
           createdById: req.userId,
+          description: "ACCEPTED_DM",
           members: {
             create: [
               { userId: req.userId, role: "MEMBER" },
@@ -1475,8 +1510,11 @@ app.post("/api/chat/invite", authMiddleware, async (req, res) => {
           console.log("└────────────────────────────────────────────────────────┘");
         }
       };
-
-      await sendMail();
+      try {
+        await sendMail();
+      } catch (mailErr) {
+        console.warn("[Chat Mail] SMTP sending failed: ", mailErr.message);
+      }
       return res.json({ ok: true, inviteLink });
     } catch (err) {
       console.warn("[Chat Service] Postgres invite creation failed, falling back to mock DB: ", err.message);
@@ -1587,8 +1625,25 @@ app.post("/api/chat/invite/:token/accept", authMiddleware, async (req, res) => {
       if (existingDM) {
         resultingChannelId = existingDM.id;
       } else {
+        // Resolve workspaceId
+        let workspaceId = "default-ws";
+        try {
+          const wsMember = await prisma.workspaceMember.findFirst({
+            where: { userId: senderId }
+          });
+          if (wsMember) {
+            workspaceId = wsMember.workspaceId;
+          } else {
+            const firstWs = await prisma.workspace.findFirst();
+            if (firstWs) workspaceId = firstWs.id;
+          }
+        } catch (e) {
+          console.warn("[Chat Service] Failed to resolve workspaceId for DM:", e.message);
+        }
+
         const newDM = await prisma.channel.create({
           data: {
+            workspaceId,
             type: "DM",
             createdById: senderId,
             description: "ACCEPTED_DM", // Since they are explicitly accepting now!
@@ -1899,9 +1954,33 @@ app.get("/api/chat/calls/active/:channelId", authMiddleware, async (req, res) =>
   }
 });
 
+// Migration: auto-heal old database DM records so they appear in sidebar instantly
+async function autoHealDMs() {
+  if (useMockDb) return;
+  try {
+    const updated = await prisma.channel.updateMany({
+      where: {
+        type: "DM",
+        NOT: {
+          description: "ACCEPTED_DM"
+        }
+      },
+      data: {
+        description: "ACCEPTED_DM"
+      }
+    });
+    if (updated.count > 0) {
+      console.log(`[Auto Heal] Successfully updated ${updated.count} DM channels to ACCEPTED_DM`);
+    }
+  } catch (err) {
+    console.warn("[Auto Heal] DB migration warning:", err.message);
+  }
+}
+
 // Start Server
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
   console.log("========================================");
   console.log(`🌊 WaveWork.ai Chat & WebRTC calling running on Port ${PORT}`);
   console.log("========================================");
+  await autoHealDMs();
 });

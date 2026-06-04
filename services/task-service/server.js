@@ -77,6 +77,11 @@ app.get("/api/tasks", async (req, res) => {
       include: {
         creator: { select: { id: true, fullName: true } },
         status: true,
+        assignees: {
+          include: {
+            user: { select: { id: true, fullName: true, email: true, avatarUrl: true } }
+          }
+        }
       },
     });
 
@@ -97,10 +102,18 @@ app.get("/api/tasks", async (req, res) => {
 
     const tasksWithDetails = filteredTasks.map((t) => {
       const status = mockDb.statuses.find((st) => st.id === t.statusId) || { id: t.statusId, name: "TO DO", color: "#8E8E93" };
+      const mockAssignees = (mockDb.taskAssignees || [])
+        .filter((ta) => ta.taskId === t.id)
+        .map((ta) => {
+          const u = mockDb.users.find((user) => user.id === ta.userId);
+          return u ? { user: { id: u.id, fullName: u.fullName, email: u.email, avatarUrl: u.avatarUrl } } : null;
+        })
+        .filter(Boolean);
       return {
         ...t,
         creator: { id: t.creatorId, fullName: "Workspace Creator" },
         status,
+        assignees: mockAssignees
       };
     });
 
@@ -222,6 +235,11 @@ app.get("/api/tasks/:id", async (req, res) => {
           orderBy: { createdAt: "desc" },
         },
         timeEntries: true,
+        assignees: {
+          include: {
+            user: { select: { id: true, fullName: true, email: true, avatarUrl: true } }
+          }
+        }
       },
     });
     if (task) return res.json(task);
@@ -238,12 +256,21 @@ app.get("/api/tasks/:id", async (req, res) => {
         return { ...c, author };
       });
 
+    const mockAssignees = (mockDb.taskAssignees || [])
+      .filter((ta) => ta.taskId === t.id)
+      .map((ta) => {
+        const u = mockDb.users.find((user) => user.id === ta.userId);
+        return u ? { user: { id: u.id, fullName: u.fullName, email: u.email, avatarUrl: u.avatarUrl } } : null;
+      })
+      .filter(Boolean);
+
     return res.json({
       ...t,
       creator: { id: t.creatorId, fullName: "Workspace Creator" },
       status,
       comments,
       timeEntries: [],
+      assignees: mockAssignees
     });
   }
 });
@@ -334,7 +361,8 @@ app.post("/api/tasks", async (req, res) => {
     return res.status(201).json({
       ...mockTask,
       status,
-      creator: { id: mockTask.creatorId, fullName: "Workspace Creator" }
+      creator: { id: mockTask.creatorId, fullName: "Workspace Creator" },
+      assignees: []
     });
   }
 });
@@ -388,7 +416,15 @@ app.patch("/api/tasks/:id", async (req, res) => {
     const task = await prisma.task.update({
       where: { id },
       data: updateData,
-      include: { status: true, list: { include: { space: true } } },
+      include: {
+        status: true,
+        list: { include: { space: true } },
+        assignees: {
+          include: {
+            user: { select: { id: true, fullName: true, email: true, avatarUrl: true } }
+          }
+        }
+      },
     });
 
     // Invalidate caches
@@ -445,10 +481,19 @@ app.patch("/api/tasks/:id", async (req, res) => {
       data: { taskId: id, listId: updated.listId, action: "UPDATED" }
     });
 
+    const mockAssignees = (mockDb.taskAssignees || [])
+      .filter((ta) => ta.taskId === updated.id)
+      .map((ta) => {
+        const u = mockDb.users.find((user) => user.id === ta.userId);
+        return u ? { user: { id: u.id, fullName: u.fullName, email: u.email, avatarUrl: u.avatarUrl } } : null;
+      })
+      .filter(Boolean);
+
     return res.json({
       ...updated,
       status,
-      creator: { id: updated.creatorId, fullName: "Workspace Creator" }
+      creator: { id: updated.creatorId, fullName: "Workspace Creator" },
+      assignees: mockAssignees
     });
   }
 });
@@ -543,6 +588,343 @@ app.post("/api/tasks/:taskId/time-entries", async (req, res) => {
     };
     mockDb.timeEntries.push(te);
     return res.status(201).json(te);
+  }
+});
+
+// ─────────────────────────────────────────────
+// SECURE TASK ASSIGNMENT API ENDPOINTS
+// ─────────────────────────────────────────────
+
+async function validateAssigneeAccess(taskId, userId) {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    include: { list: { include: { space: true } } },
+  });
+  if (!task) return { valid: false, error: "Task not found" };
+
+  const space = task.list.space;
+
+  // 1. Verify user is workspace member
+  const workspaceMember = await prisma.workspaceMember.findFirst({
+    where: { workspaceId: space.workspaceId, userId },
+  });
+  if (!workspaceMember) {
+    return { valid: false, error: "User is not a member of the workspace" };
+  }
+
+  // 2. If private space, verify user is space member
+  if (space.isPrivate) {
+    const spaceMember = await prisma.spaceMember.findFirst({
+      where: { spaceId: space.id, userId },
+    });
+    if (!spaceMember) {
+      return { valid: false, error: "User does not have access to this private Space" };
+    }
+  }
+
+  return { valid: true };
+}
+
+function validateAssigneeAccessMock(taskId, userId) {
+  const task = mockDb.tasks.find((t) => t.id === taskId);
+  if (!task) return { valid: false, error: "Task not found" };
+
+  const list = mockDb.lists.find((l) => l.id === task.listId);
+  const spaceId = list ? list.spaceId : "demo-space";
+  const space = mockDb.spaces.find((s) => s.id === spaceId);
+
+  // In mockDb, we verify the user exists
+  const user = mockDb.users.find((u) => u.id === userId);
+  if (!user) {
+    return { valid: false, error: "User not found" };
+  }
+
+  // If private space, verify user is space member
+  if (space && space.isPrivate) {
+    const spaceMember = (mockDb.spaceMembers || []).find(
+      (sm) => sm.spaceId === spaceId && sm.userId === userId
+    );
+    if (!spaceMember) {
+      return { valid: false, error: "User does not have access to this private Space" };
+    }
+  }
+
+  return { valid: true };
+}
+
+// GET /api/tasks/:id/assignees
+app.get("/api/tasks/:id/assignees", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const assignees = await prisma.taskAssignee.findMany({
+      where: { taskId: id },
+      include: { user: { select: { id: true, fullName: true, email: true, avatarUrl: true } } },
+    });
+    return res.json(assignees.map((a) => a.user));
+  } catch (error) {
+    const assignees = (mockDb.taskAssignees || [])
+      .filter((ta) => ta.taskId === id)
+      .map((ta) => {
+        const u = mockDb.users.find((user) => user.id === ta.userId);
+        return u ? { id: u.id, fullName: u.fullName, email: u.email, avatarUrl: u.avatarUrl } : null;
+      })
+      .filter(Boolean);
+    return res.json(assignees);
+  }
+});
+
+// GET /api/tasks/:id/eligible-assignees
+app.get("/api/tasks/:id/eligible-assignees", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const task = await prisma.task.findUnique({
+      where: { id },
+      include: { list: { include: { space: true } } },
+    });
+    if (!task) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    const space = task.list.space;
+    if (space.isPrivate) {
+      const spaceMembers = await prisma.spaceMember.findMany({
+        where: { spaceId: space.id },
+        include: { user: { select: { id: true, fullName: true, email: true, avatarUrl: true } } },
+      });
+      return res.json(spaceMembers.map((sm) => sm.user));
+    } else {
+      const workspaceMembers = await prisma.workspaceMember.findMany({
+        where: { workspaceId: space.workspaceId },
+        include: { user: { select: { id: true, fullName: true, email: true, avatarUrl: true } } },
+      });
+      return res.json(workspaceMembers.map((wm) => wm.user));
+    }
+  } catch (error) {
+    const task = mockDb.tasks.find((t) => t.id === id);
+    if (!task) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+    const list = mockDb.lists.find((l) => l.id === task.listId);
+    const spaceId = list ? list.spaceId : "demo-space";
+    const space = mockDb.spaces.find((s) => s.id === spaceId);
+    
+    if (space && space.isPrivate) {
+      const spaceMembers = (mockDb.spaceMembers || [])
+        .filter((sm) => sm.spaceId === spaceId)
+        .map((sm) => {
+          const u = mockDb.users.find((user) => user.id === sm.userId);
+          return u ? { id: u.id, fullName: u.fullName, email: u.email, avatarUrl: u.avatarUrl } : null;
+        })
+        .filter(Boolean);
+      return res.json(spaceMembers);
+    } else {
+      const users = mockDb.users.map((u) => ({
+        id: u.id,
+        fullName: u.fullName,
+        email: u.email,
+        avatarUrl: u.avatarUrl,
+      }));
+      return res.json(users);
+    }
+  }
+});
+
+// POST /api/tasks/:id/assignees
+app.post("/api/tasks/:id/assignees", async (req, res) => {
+  const { id } = req.params;
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  try {
+    const validation = await validateAssigneeAccess(id, userId);
+    if (!validation.valid) {
+      return res.status(403).json({ error: validation.error });
+    }
+
+    const assignee = await prisma.taskAssignee.upsert({
+      where: { taskId_userId: { taskId: id, userId } },
+      create: { taskId: id, userId },
+      update: {},
+      include: { user: { select: { id: true, fullName: true, email: true, avatarUrl: true } } },
+    });
+
+    const task = await prisma.task.findUnique({ where: { id } });
+    if (task) {
+      await invalidateTasksCache(task.listId);
+      const listObj = await prisma.list.findUnique({
+        where: { id: task.listId },
+        include: { space: true },
+      });
+      await publishEvent("ws:emit", {
+        room: `workspace:${listObj?.space.workspaceId || "mock-ws"}`,
+        event: "task:changed",
+        data: { taskId: id, listId: task.listId, action: "UPDATED" }
+      });
+    }
+
+    return res.status(201).json(assignee.user);
+  } catch (error) {
+    const validation = validateAssigneeAccessMock(id, userId);
+    if (!validation.valid) {
+      return res.status(403).json({ error: validation.error });
+    }
+
+    if (!mockDb.taskAssignees) {
+      mockDb.taskAssignees = [];
+    }
+
+    const existing = mockDb.taskAssignees.find((ta) => ta.taskId === id && ta.userId === userId);
+    if (!existing) {
+      mockDb.taskAssignees.push({ taskId: id, userId });
+    }
+
+    const task = mockDb.tasks.find((t) => t.id === id);
+    if (task) {
+      if (!task.assignees) task.assignees = [];
+      if (!task.assignees.some((a) => a.userId === userId)) {
+        task.assignees.push({ userId });
+      }
+
+      await publishEvent("ws:emit", {
+        room: "workspace:default-ws",
+        event: "task:changed",
+        data: { taskId: id, listId: task.listId, action: "UPDATED" }
+      });
+    }
+
+    const u = mockDb.users.find((user) => user.id === userId);
+    return res.status(201).json({ id: u.id, fullName: u.fullName, email: u.email, avatarUrl: u.avatarUrl });
+  }
+});
+
+// DELETE /api/tasks/:id/assignees/:userId
+app.delete("/api/tasks/:id/assignees/:userId", async (req, res) => {
+  const { id, userId } = req.params;
+
+  try {
+    await prisma.taskAssignee.delete({
+      where: { taskId_userId: { taskId: id, userId } },
+    });
+
+    const task = await prisma.task.findUnique({ where: { id } });
+    if (task) {
+      await invalidateTasksCache(task.listId);
+      const listObj = await prisma.list.findUnique({
+        where: { id: task.listId },
+        include: { space: true },
+      });
+      await publishEvent("ws:emit", {
+        room: `workspace:${listObj?.space.workspaceId || "mock-ws"}`,
+        event: "task:changed",
+        data: { taskId: id, listId: task.listId, action: "UPDATED" }
+      });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    if (mockDb.taskAssignees) {
+      mockDb.taskAssignees = mockDb.taskAssignees.filter(
+        (ta) => !(ta.taskId === id && ta.userId === userId)
+      );
+    }
+
+    const task = mockDb.tasks.find((t) => t.id === id);
+    if (task) {
+      if (task.assignees) {
+        task.assignees = task.assignees.filter((a) => a.userId !== userId);
+      }
+
+      await publishEvent("ws:emit", {
+        room: "workspace:default-ws",
+        event: "task:changed",
+        data: { taskId: id, listId: task.listId, action: "UPDATED" }
+      });
+    }
+
+    return res.json({ success: true });
+  }
+});
+
+// PATCH /api/tasks/:id/assignees
+app.patch("/api/tasks/:id/assignees", async (req, res) => {
+  const { id } = req.params;
+  const { userIds } = req.body;
+  if (!userIds || !Array.isArray(userIds)) {
+    return res.status(400).json({ error: "userIds array is required" });
+  }
+
+  try {
+    for (const userId of userIds) {
+      const validation = await validateAssigneeAccess(id, userId);
+      if (!validation.valid) {
+        return res.status(403).json({ error: `User ${userId}: ${validation.error}` });
+      }
+    }
+
+    await prisma.$transaction([
+      prisma.taskAssignee.deleteMany({ where: { taskId: id } }),
+      prisma.taskAssignee.createMany({
+        data: userIds.map((userId) => ({ taskId: id, userId })),
+        skipDuplicates: true,
+      }),
+    ]);
+
+    const task = await prisma.task.findUnique({ where: { id } });
+    if (task) {
+      await invalidateTasksCache(task.listId);
+      const listObj = await prisma.list.findUnique({
+        where: { id: task.listId },
+        include: { space: true },
+      });
+      await publishEvent("ws:emit", {
+        room: `workspace:${listObj?.space.workspaceId || "mock-ws"}`,
+        event: "task:changed",
+        data: { taskId: id, listId: task.listId, action: "UPDATED" }
+      });
+    }
+
+    const assignees = await prisma.taskAssignee.findMany({
+      where: { taskId: id },
+      include: { user: { select: { id: true, fullName: true, email: true, avatarUrl: true } } },
+    });
+    return res.json(assignees.map((a) => a.user));
+  } catch (error) {
+    for (const userId of userIds) {
+      const validation = validateAssigneeAccessMock(id, userId);
+      if (!validation.valid) {
+        return res.status(403).json({ error: `User ${userId}: ${validation.error}` });
+      }
+    }
+
+    if (!mockDb.taskAssignees) {
+      mockDb.taskAssignees = [];
+    }
+
+    mockDb.taskAssignees = mockDb.taskAssignees.filter((ta) => ta.taskId !== id);
+    userIds.forEach((userId) => {
+      mockDb.taskAssignees.push({ taskId: id, userId });
+    });
+
+    const task = mockDb.tasks.find((t) => t.id === id);
+    if (task) {
+      task.assignees = userIds.map((userId) => ({ userId }));
+
+      await publishEvent("ws:emit", {
+        room: "workspace:default-ws",
+        event: "task:changed",
+        data: { taskId: id, listId: task.listId, action: "UPDATED" }
+      });
+    }
+
+    const users = userIds
+      .map((userId) => {
+        const u = mockDb.users.find((user) => user.id === userId);
+        return u ? { id: u.id, fullName: u.fullName, email: u.email, avatarUrl: u.avatarUrl } : null;
+      })
+      .filter(Boolean);
+    return res.json(users);
   }
 });
 

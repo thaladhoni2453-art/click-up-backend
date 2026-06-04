@@ -253,6 +253,11 @@ app.get("/api/extra/channels", async (req, res) => {
       const isDM = chan.type === "DM" || chan.name.startsWith("dm:");
       if (isDM) {
         if (chan.description !== "ACCEPTED_DM") continue; // SKIP pending DM chats until accepted
+        
+        // Ensure the current user is actually a member of this DM!
+        const isMember = chan.members.some((m) => m.userId === currentUserId);
+        if (!isMember) continue;
+
         let otherUser = null;
         let otherId = null;
         if (chan.members && chan.members.length > 0) {
@@ -298,6 +303,11 @@ app.get("/api/extra/channels", async (req, res) => {
       const isDM = chan.type === "DM" || chan.isDM || !chan.isGroup || chan.name.startsWith("dm:");
       if (isDM) {
         if (chan.description !== "ACCEPTED_DM") continue; // SKIP pending DM chats until accepted
+        
+        // Ensure the current user is actually a participant of this mock DM!
+        const participantIds = chan.participantIds || [];
+        if (!participantIds.includes(currentUserId)) continue;
+
         let otherId = null;
         if (chan.participantIds) {
           otherId = chan.participantIds.find((p) => p !== currentUserId) || chan.participantIds[0];
@@ -352,7 +362,7 @@ app.post("/api/extra/channels", async (req, res) => {
           data: {
             workspaceId: req.orgId || "mock-org",
             name: dmRoomName,
-            description: `DM Chat Room`,
+            description: `ACCEPTED_DM`,
             isPrivate: true
           }
         });
@@ -373,7 +383,7 @@ app.post("/api/extra/channels", async (req, res) => {
           id: "mock-dm-" + Date.now(),
           workspaceId: req.orgId || "mock-org",
           name: dmRoomName,
-          description: `DM Chat Room`,
+          description: `ACCEPTED_DM`,
           isPrivate: true
         };
         mockDb.channels.push(channel);
@@ -1326,7 +1336,31 @@ app.post("/api/extra/ai/workspace/standup", async (req, res) => {
   });
 });
 
+// Migration: auto-heal old database DM records so they appear in sidebar instantly
+async function autoHealDMs() {
+  if (isDbOffline) return;
+  try {
+    const updated = await prisma.channel.updateMany({
+      where: {
+        type: "DM",
+        NOT: {
+          description: "ACCEPTED_DM"
+        }
+      },
+      data: {
+        description: "ACCEPTED_DM"
+      }
+    });
+    if (updated.count > 0) {
+      console.log(`[Auto Heal Extra] Successfully updated ${updated.count} DM channels to ACCEPTED_DM`);
+    }
+  } catch (err) {
+    console.warn("[Auto Heal Extra] DB migration warning:", err.message);
+  }
+}
+
 const PORT = 3005;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`[Extra Service] Running on Port ${PORT}`);
+  await autoHealDMs();
 });

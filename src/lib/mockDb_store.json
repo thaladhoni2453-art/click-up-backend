@@ -17,6 +17,30 @@
       "email": "demo@wavework.ai",
       "fullName": "Demo User",
       "passwordHash": "$2b$10$r845X4F9.TfG0W9kK7kQhO9Q6G5mQO6iE.1m825L07f4G1qO6G5mQ"
+    },
+    {
+      "id": "mock-user-1780480287169",
+      "email": "userB-20260603151506@wavework.ai",
+      "passwordHash": "$2b$10$IUDmDYKsGqi0BAkmlMtTueYlDX0jhE/SI28iGipZk4/xbBgAUlhYq",
+      "fullName": "User B"
+    },
+    {
+      "id": "mock-user-1780483037133",
+      "email": "test@gmail.com",
+      "passwordHash": "$2b$10$V2WwhZYfuB/AXIwfY96G8ezDIe17Lv9vuTwpRJSsswigGmiN8f0ky",
+      "fullName": "test"
+    },
+    {
+      "id": "mock-user-1780483206434",
+      "email": "aiverse59@gmail.com",
+      "passwordHash": "$2b$10$DB86r3fk6DmW7AB2zV4LUun98ber8QhcrpqzhcfW98sGNBXBz66RO",
+      "fullName": "Ai"
+    },
+    {
+      "id": "mock-user-1780553724822",
+      "email": "project112242@gmail.com",
+      "passwordHash": "$2b$10$hCmivo2c9h1focO9n1aDBOx12m//vvqZxa3tYE4aXP8Z1crJHihiO",
+      "fullName": "Rahul"
     }
   ],
   "organizations": [
@@ -24,6 +48,26 @@
       "id": "mock-org",
       "name": "WaveWork.ai Org",
       "slug": "wavework-ai-org"
+    },
+    {
+      "id": "mock-org-1780480287176",
+      "name": "Test Org",
+      "slug": "test-org"
+    },
+    {
+      "id": "mock-org-1780483037138",
+      "name": "Dell",
+      "slug": "dell"
+    },
+    {
+      "id": "mock-org-1780483206436",
+      "name": "Dell",
+      "slug": "dell"
+    },
+    {
+      "id": "mock-org-1780553724839",
+      "name": "Dell",
+      "slug": "dell"
     }
   ],
   "workspaces": [
@@ -37,6 +81,34 @@
     {
       "id": "mock-ws-1780038069415",
       "orgId": "mock-org-1780038069415",
+      "name": "My Workspace",
+      "color": "#4F46E5",
+      "icon": "Briefcase"
+    },
+    {
+      "id": "mock-ws-1780480287176",
+      "orgId": "mock-org-1780480287176",
+      "name": "My Workspace",
+      "color": "#4F46E5",
+      "icon": "Briefcase"
+    },
+    {
+      "id": "mock-ws-1780483037138",
+      "orgId": "mock-org-1780483037138",
+      "name": "My Workspace",
+      "color": "#4F46E5",
+      "icon": "Briefcase"
+    },
+    {
+      "id": "mock-ws-1780483206436",
+      "orgId": "mock-org-1780483206436",
+      "name": "My Workspace",
+      "color": "#4F46E5",
+      "icon": "Briefcase"
+    },
+    {
+      "id": "mock-ws-1780553724839",
+      "orgId": "mock-org-1780553724839",
       "name": "My Workspace",
       "color": "#4F46E5",
       "icon": "Briefcase"
@@ -227,6 +299,56 @@
       "estimated_hours": 0,
       "points": null,
       "story_points": 0
+    },
+    {
+      "id": "mock-task-1780479135293",
+      "listId": "cmpxvaznv0009rqnbdx1gfv11",
+      "creatorId": "cmpxtf4st000b6kyqrch9hssr",
+      "statusId": "cmpxva9rd0005rqnbvx9h0ura",
+      "name": "ff",
+      "description": "\n\n__ENERGY_TAG__: Low",
+      "priority": "NORMAL",
+      "dueDate": "2026-06-01T06:30:00.000Z",
+      "position": 1000,
+      "timeSpent": 0,
+      "timeEstimate": 1,
+      "estimated_hours": 1,
+      "points": null,
+      "story_points": 0,
+      "completed_at": null
+    },
+    {
+      "id": "mock-task-1780555801260",
+      "listId": "cmpxvaznm0007rqnbuysbavtw",
+      "creatorId": "cmpxtf4st000b6kyqrch9hssr",
+      "statusId": "todo",
+      "name": "jj",
+      "description": "\n\n__ENERGY_TAG__: Low",
+      "priority": "NORMAL",
+      "dueDate": "2026-06-02T06:30:00.000Z",
+      "position": 1000,
+      "timeSpent": 0,
+      "timeEstimate": 1,
+      "estimated_hours": 1,
+      "points": null,
+      "story_points": 0
+    },
+    {
+      "id": "mock-task-1780558681714",
+      "listId": "cmpxvaznm0007rqnbuysbavtw",
+      "creatorId": "cmpxtf4st000b6kyqrch9hssr",
+      "statusId": "cmpxva9rd0005rqnbvx9h0ura",
+      "name": "gg3g3g",
+      "description": "\n\n__ENERGY_TAG__: Deep",
+      "priority": "URGENT",
+      "dueDate": "2026-06-03T06:30:00.000Z",
+      "position": 1000,
+      "timeSpent": 0,
+      "timeEstimate": 3,
+      "estimated_hours": 3,
+      "points": null,
+      "story_points": 0,
+      "completed_at": null
     }
   ],
   "comments": [
@@ -269,10 +391,177 @@
         "mock-user-karthik"
       ],
       "description": "sender@wavework.ai invited karthik245322748042@gmail.com"
+    },
+    {
+      "id": "mock-dm-1780475978195",
+      "name": "dm:cmpxteptt00026kyqe94zrl9w:cmpxtf4st000b6kyqrch9hssr",
+      "isDM": true,
+      "type": "DM",
+      "isGroup": false,
+      "participantIds": [
+        "cmpxtf4st000b6kyqrch9hssr",
+        "cmpxteptt00026kyqe94zrl9w"
+      ],
+      "description": "sender@wavework.ai invited receiver@wavework.ai"
+    },
+    {
+      "id": "mock-dm-1780483247024",
+      "name": "dm:mock-user-1780483206434:mock-user-karthik",
+      "isDM": true,
+      "type": "DM",
+      "isGroup": false,
+      "participantIds": [
+        "mock-user-1780483206434",
+        "mock-user-karthik"
+      ],
+      "description": "ACCEPTED_DM"
+    },
+    {
+      "id": "mock-dm-1780553838208",
+      "name": "dm:mock-user-1780553724822:mock-user-karthik",
+      "isDM": true,
+      "type": "DM",
+      "isGroup": false,
+      "participantIds": [
+        "mock-user-1780553724822",
+        "mock-user-karthik"
+      ],
+      "description": "ACCEPTED_DM"
+    },
+    {
+      "id": "mock-dm-1780555835134",
+      "workspaceId": "demo-ws",
+      "name": "dm:cmpxtf4st000b6kyqrch9hssr:mock-user-karthik",
+      "description": "PENDING_DM",
+      "isPrivate": true,
+      "type": "DM",
+      "isDM": true,
+      "participantIds": [
+        "cmpxtf4st000b6kyqrch9hssr",
+        "mock-user-karthik"
+      ]
     }
   ],
-  "inbox": [],
-  "messages": [],
+  "inbox": [
+    {
+      "id": "mock-invite-1780483374186",
+      "userId": "mock-user-karthik",
+      "type": "MENTION",
+      "title": "Workspace Invitation",
+      "body": "Ai has invited you for a chat",
+      "data": {
+        "type": "INVITE",
+        "inviterEmail": "aiverse59@gmail.com",
+        "inviterName": "Ai",
+        "chatId": "mock-dm-1780483247024"
+      },
+      "isRead": false,
+      "createdAt": "2026-06-03T10:42:54.187Z"
+    },
+    {
+      "id": "mock-invite-1780553880403",
+      "userId": "mock-user-karthik",
+      "type": "MENTION",
+      "title": "Workspace Invitation",
+      "body": "Rahul has invited you for a chat",
+      "data": {
+        "type": "INVITE",
+        "inviterEmail": "project112242@gmail.com",
+        "inviterName": "Rahul",
+        "chatId": "mock-dm-1780553838208"
+      },
+      "isRead": false,
+      "createdAt": "2026-06-04T06:18:00.404Z"
+    },
+    {
+      "id": "mock-invite-1780555835145",
+      "userId": "mock-user-karthik",
+      "type": "MENTION",
+      "title": "Workspace Invitation",
+      "body": "Karthik Mareddy has invited you for a chat",
+      "data": {
+        "type": "INVITE",
+        "inviterEmail": "karthik245322748042@gmail.com",
+        "inviterName": "Karthik Mareddy",
+        "chatId": "mock-dm-1780555835134"
+      },
+      "isRead": false,
+      "createdAt": "2026-06-04T06:50:35.145Z"
+    },
+    {
+      "id": "mock-invite-1780562988795",
+      "userId": "mock-user-karthik",
+      "type": "MENTION",
+      "title": "Workspace Invitation",
+      "body": "Karthik Mareddy has invited you for a chat",
+      "data": {
+        "type": "INVITE",
+        "inviterEmail": "karthik245322748042@gmail.com",
+        "inviterName": "Karthik Mareddy",
+        "chatId": "mock-dm-1780555835134"
+      },
+      "isRead": false,
+      "createdAt": "2026-06-04T08:49:48.795Z"
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg-1780483250150",
+      "channelId": "mock-dm-1780483247024",
+      "authorId": "mock-user-1780483206434",
+      "authorName": "Ai",
+      "content": "hello",
+      "createdAt": "2026-06-03T10:40:50.150Z"
+    },
+    {
+      "id": "mock-msg-invite-1780483374190",
+      "channelId": "mock-dm-1780483247024",
+      "authorId": "mock-user-1780483206434",
+      "authorName": "Ai",
+      "content": "Ai has invited you for a chat",
+      "createdAt": "2026-06-03T10:42:54.190Z"
+    },
+    {
+      "id": "msg-1780553845716",
+      "channelId": "mock-dm-1780553838208",
+      "authorId": "mock-user-1780553724822",
+      "authorName": "Rahul",
+      "content": "hi",
+      "createdAt": "2026-06-04T06:17:25.716Z"
+    },
+    {
+      "id": "mock-msg-invite-1780553880408",
+      "channelId": "mock-dm-1780553838208",
+      "authorId": "mock-user-1780553724822",
+      "authorName": "Rahul",
+      "content": "Rahul has invited you for a chat",
+      "createdAt": "2026-06-04T06:18:00.408Z"
+    },
+    {
+      "id": "msg-1780553937549",
+      "channelId": "mock-dm-1780553838208",
+      "authorId": "mock-user-1780553724822",
+      "authorName": "Rahul",
+      "content": "hi",
+      "createdAt": "2026-06-04T06:18:57.549Z"
+    },
+    {
+      "id": "mock-msg-invite-1780555835150",
+      "channelId": "mock-dm-1780555835134",
+      "authorId": "cmpxtf4st000b6kyqrch9hssr",
+      "authorName": "Karthik Mareddy",
+      "content": "Karthik Mareddy has invited you for a chat",
+      "createdAt": "2026-06-04T06:50:35.150Z"
+    },
+    {
+      "id": "mock-msg-invite-1780562988800",
+      "channelId": "mock-dm-1780555835134",
+      "authorId": "cmpxtf4st000b6kyqrch9hssr",
+      "authorName": "Karthik Mareddy",
+      "content": "Karthik Mareddy has invited you for a chat",
+      "createdAt": "2026-06-04T08:49:48.800Z"
+    }
+  ],
   "timeEntries": [
     {
       "id": "mock-te-1780072531932",

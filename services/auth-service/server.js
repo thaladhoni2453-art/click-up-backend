@@ -40,7 +40,9 @@ app.post("/api/auth/register", async (req, res) => {
 
   try {
     const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
+    const isPlaceholderUser = existingUser && (!existingUser.passwordHash || existingUser.passwordHash.startsWith("$2b$10$demoHashPlaceholderForLocalBcryptTestingOnlyString"));
+
+    if (existingUser && !isPlaceholderUser) {
       return res.status(400).json({ error: "User already exists with this email" });
     }
 
@@ -53,9 +55,17 @@ app.post("/api/auth/register", async (req, res) => {
         data: { name: orgName, slug: orgSlug },
       });
 
-      const user = await tx.user.create({
-        data: { email, passwordHash, fullName },
-      });
+      let user;
+      if (isPlaceholderUser) {
+        user = await tx.user.update({
+          where: { id: existingUser.id },
+          data: { passwordHash, fullName },
+        });
+      } else {
+        user = await tx.user.create({
+          data: { email, passwordHash, fullName },
+        });
+      }
 
       await tx.orgMember.create({
         data: { orgId: organization.id, userId: user.id, role: "OWNER" },
